@@ -1,0 +1,184 @@
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+class QLearningAgent:
+    def __init__(self, environment, learning_rate=0.1, discount_factor=0.9, epsilon=0.1):
+        self.environment = environment  # The environment object
+        self.learning_rate = learning_rate  # Learning rate (alpha)
+        self.discount_factor = discount_factor  # Discount factor (gamma)
+        self.epsilon = epsilon  # Exploration rate (epsilon)
+        self.q_table = {}  # Initialize Q-table (empty dictionary)
+
+    def act(self, state):
+        # If the state has not been encountered before, initialize the Q-values for all possible actions
+        if state not in self.q_table:
+            self.q_table[state] = {action: 0 for action in self.environment.get_possible_actions()}
+
+        # Exploration: Random action
+        if random.uniform(0, 1) < self.epsilon:
+            return random.choice(self.environment.get_possible_actions())  # Exploration
+
+        # Exploitation: Best action based on current Q-values
+        return max(self.q_table[state], key=self.q_table[state].get)  # Exploitation
+
+    def remember(self, state, action, reward, next_state, done):
+        # If the state is not in the Q-table, initialize its Q-values
+        if state not in self.q_table:
+            self.q_table[state] = {action: 0 for action in self.environment.get_possible_actions()}
+
+        # If the next_state is not in the Q-table, initialize its Q-values
+        if next_state not in self.q_table:
+            self.q_table[next_state] = {action: 0 for action in self.environment.get_possible_actions()}
+
+        # Update Q-table using the Q-learning formula
+        old_q_value = self.q_table[state][action]
+        future_q_value = max(self.q_table[next_state].values())  # Best future Q-value
+        new_q_value = old_q_value + self.learning_rate * (reward + self.discount_factor * future_q_value - old_q_value)
+        self.q_table[state][action] = new_q_value  # Update Q-value
+
+    def train(self, episodes):
+        total_rewards = []  # List to store total rewards for each episode
+        steps_per_episode = []  # List to store steps per episode
+        cost_per_episode = []  # List to store total cost per episode (negative reward as cost)
+
+        for episode in range(episodes):
+            state = self.environment.reset()  # Reset the environment to start a new episode
+            done = False
+            total_reward = 0  # Total reward for this episode
+            total_steps = 0  # Steps taken in this episode
+            path = [state]  # Store the path taken during the episode
+
+            while not done:
+                action = self.act(state)  # Choose an action based on the policy (exploration/exploitation)
+                next_state, reward, done = self.environment.step(action)  # Take action and get next state and reward
+
+                self.remember(state, action, reward, next_state, done)  # Remember the experience
+                state = next_state  # Move to the next state
+
+                total_reward += reward  # Update total reward for this episode
+                total_steps += 1  # Increment steps count
+                path.append(state)  # Store the current state in the path
+
+            total_rewards.append(total_reward)  # Store the total reward of this episode
+            steps_per_episode.append(total_steps)  # Store the number of steps of this episode
+            cost_per_episode.append(-total_reward)  # Total cost is the negative reward
+
+            # Visualize the agent's movement after each episode
+            self.environment.visualize(path)
+
+        return total_rewards, steps_per_episode, cost_per_episode
+
+
+class Environment:
+    def __init__(self, grid_size=(5, 5)):
+        self.grid_size = grid_size  # Define the grid size (5x5 grid by default)
+        self.state = (0, 0)  # Starting position (top-left corner)
+        self.goal = (4, 4)  # Goal position (bottom-right corner)
+        self.actions = ['up', 'down', 'left', 'right']  # Available actions
+        self.reset()  # Initialize the environment
+
+    def reset(self):
+        # Reset the environment to the starting position
+        self.state = (0, 0)
+        return self.state
+
+    def get_possible_actions(self):
+        # Return all possible actions (up, down, left, right)
+        return self.actions
+
+    def step(self, action):
+        # Take the specified action and return the next state, reward, and done flag
+        x, y = self.state
+
+        if action == 'up' and x > 0:
+            x -= 1
+        elif action == 'down' and x < self.grid_size[0] - 1:
+            x += 1
+        elif action == 'left' and y > 0:
+            y -= 1
+        elif action == 'right' and y < self.grid_size[1] - 1:
+            y += 1
+
+        next_state = (x, y)
+
+        # Check if the agent has reached the goal
+        if next_state == self.goal:
+            reward = 1  # Positive reward for reaching the goal
+            done = True  # Episode is done
+        else:
+            reward = -0.01  # Small penalty for each step to encourage shorter paths
+            done = False  # Episode is not done
+
+        self.state = next_state  # Update the agent's state
+        return next_state, reward, done
+
+    def visualize(self, path):
+        # Visualize the path the agent took during the episode
+        grid = np.zeros(self.grid_size)  # Create an empty grid
+        fig, ax = plt.subplots(figsize=(6, 6))
+
+        # Plot the grid
+        ax.set_xticks(np.arange(self.grid_size[1]))
+        ax.set_yticks(np.arange(self.grid_size[0]))
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.grid(True)
+
+        # Plot the agent's path
+        for i in range(len(path) - 1):
+            current_pos = path[i]
+            next_pos = path[i + 1]
+            ax.plot([current_pos[1], next_pos[1]], [current_pos[0], next_pos[0]], 'bo-', markersize=5)
+
+        # Mark the goal
+        ax.plot(self.goal[1], self.goal[0], 'gs', markersize=10, label="Goal")
+
+        # Mark the starting position
+        ax.plot(path[0][1], path[0][0], 'ro', markersize=10, label="Start")
+
+        plt.title("Agent's Path")
+        plt.legend()
+        plt.show()
+
+
+# Initialize the environment and the Q-learning agent
+environment = Environment(grid_size=(5, 5))
+agent = QLearningAgent(environment)
+
+# Train the agent for 100 episodes (for a more thorough training)
+episodes = 100
+rewards, steps, costs = agent.train(episodes)
+
+# Plot Learning Curves
+
+# Episode vs Steps
+plt.figure(figsize=(10, 5))
+plt.plot(range(episodes), steps, label='Steps per Episode', color='b')
+plt.xlabel('Episode')
+plt.ylabel('Steps')
+plt.title('Episode vs Steps')
+plt.grid(True)
+plt.legend()
+
+# Episode vs Cost
+plt.figure(figsize=(10, 5))
+plt.plot(range(episodes), costs, label='Cost per Episode', color='r')
+plt.xlabel('Episode')
+plt.ylabel('Cost')
+plt.title('Episode vs Cost')
+plt.grid(True)
+plt.legend()
+
+# Episode vs Moving Average of Reward (Learning Curve)
+moving_avg_rewards = np.convolve(rewards, np.ones(10)/10, mode='valid')  # Moving average
+plt.figure(figsize=(10, 5))
+plt.plot(range(len(moving_avg_rewards)), moving_avg_rewards, label='Moving Avg. of Rewards', color='g')
+plt.xlabel('Episode')
+plt.ylabel('Reward')
+plt.title('Episode vs Moving Average of Reward')
+plt.grid(True)
+plt.legend()
+
+plt.show()
